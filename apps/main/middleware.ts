@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import type { NextRequestWithAuth } from "next-auth/middleware";
 
 // Define app configurations with container names for Docker networking
 const APP_CONFIGS = {
   master: {
-    port: 3001,
+    port: "https://test-vercel-master.vercel.app",
     path: '/master',
     container: 'inops-master-app'
   },
@@ -46,20 +45,11 @@ function getAppHost(containerName: string, port: number): string {
   // In Docker, use container names for internal communication
   // In local development, use localhost
   const isDocker = process.env.DOCKER_ENV === 'true';
-  if (isDocker) {
-    return `http://${containerName}:${port}`;
-  }
-  
-  // Use deployed Vercel URLs for production
-  if (containerName === 'inops-master-app') {
-    return 'https://test-vercel-master.vercel.app';
-  }
-  
-  return `https://www.inopsit.com`;
+  return isDocker ? `${port}` : `${port}`;
 }
 
 // Function to handle app routing
-async function handleAppRouting(request: NextRequestWithAuth) {
+async function handleAppRouting(request: NextRequest) {
   // Special handling for master app routes
   if (request.nextUrl.pathname.startsWith('/master')) {
     if (!isMasterAppReady) {
@@ -209,14 +199,14 @@ async function handleAppRouting(request: NextRequestWithAuth) {
   return NextResponse.next();
 }
 
-// Export the middleware without authentication - allow all routes
+// Export the middleware without authentication
 export default async function middleware(request: NextRequest) {
   // Handle invalid login URLs
   if (request.nextUrl.pathname.startsWith('/login/') || request.nextUrl.pathname === '/login6') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Allow all auth-related paths and static files
+  // Allow auth-related paths and static assets
   if (
     request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname.startsWith('/_next') ||
@@ -227,14 +217,14 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Handle app routing without authentication
-  return handleAppRouting(request as NextRequestWithAuth);
+  // Handle app routing without authentication checks
+  return handleAppRouting(request);
 }
 
 // Update matcher to catch all routes for routing (no authentication required)
 export const config = {
   matcher: [
-    // App routing matcher - allow all routes without authentication
+    // App routing matcher
     '/master/:path*',
     '/master',
     '/dashboard/:path*',
