@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { withAuth } from "next-auth/middleware";
 import type { NextRequestWithAuth } from "next-auth/middleware";
-import { getToken } from 'next-auth/jwt';
 
 // Define app configurations with container names for Docker networking
 const APP_CONFIGS = {
@@ -48,7 +46,16 @@ function getAppHost(containerName: string, port: number): string {
   // In Docker, use container names for internal communication
   // In local development, use localhost
   const isDocker = process.env.DOCKER_ENV === 'true';
-  return isDocker ? `http://${containerName}:${port}` : `https://www.inopsit.com`;
+  if (isDocker) {
+    return `http://${containerName}:${port}`;
+  }
+  
+  // Use deployed Vercel URLs for production
+  if (containerName === 'inops-master-app') {
+    return 'https://test-vercel-master.vercel.app';
+  }
+  
+  return `https://www.inopsit.com`;
 }
 
 // Function to handle app routing
@@ -202,55 +209,32 @@ async function handleAppRouting(request: NextRequestWithAuth) {
   return NextResponse.next();
 }
 
-// Export the combined middleware with authentication
-export default withAuth(
-  async function middleware(request: NextRequestWithAuth) {
-    // Handle invalid login URLs
-    if (request.nextUrl.pathname.startsWith('/login/') || request.nextUrl.pathname === '/login6') {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    // First check if the request is for auth-related paths
-    if (
-      request.nextUrl.pathname.startsWith('/api/auth') ||
-      request.nextUrl.pathname.startsWith('/_next') ||
-      request.nextUrl.pathname === '/favicon.ico' ||
-      request.nextUrl.pathname.startsWith('/public') ||
-      request.nextUrl.pathname === '/login' // Allow access to custom login page
-    ) {
-      return NextResponse.next();
-    }
-
-    // Check for token and expiry
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    if (!token || !token.expires_at) {
-      // No token or no expiry info, redirect to login
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-    if (token.expires_at * 1000 < Date.now()) {
-      // Token expired, redirect to login
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    // Then handle app routing
-    return handleAppRouting(request);
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
-    pages: {
-      signIn: "/login", // Redirect to custom login page instead of directly to Keycloak
-    },
+// Export the middleware without authentication - allow all routes
+export default async function middleware(request: NextRequest) {
+  // Handle invalid login URLs
+  if (request.nextUrl.pathname.startsWith('/login/') || request.nextUrl.pathname === '/login6') {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
-);
 
-// Update matcher to catch all routes that need authentication and routing
+  // Allow all auth-related paths and static files
+  if (
+    request.nextUrl.pathname.startsWith('/api/auth') ||
+    request.nextUrl.pathname.startsWith('/_next') ||
+    request.nextUrl.pathname === '/favicon.ico' ||
+    request.nextUrl.pathname.startsWith('/public') ||
+    request.nextUrl.pathname === '/login' // Allow access to custom login page
+  ) {
+    return NextResponse.next();
+  }
+
+  // Handle app routing without authentication
+  return handleAppRouting(request as NextRequestWithAuth);
+}
+
+// Update matcher to catch all routes for routing (no authentication required)
 export const config = {
   matcher: [
-    // Auth matcher (protect all routes except auth-related ones and login page)
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)",
-    // App routing matcher
+    // App routing matcher - allow all routes without authentication
     '/master/:path*',
     '/master',
     '/dashboard/:path*',
@@ -260,6 +244,8 @@ export const config = {
     '/reports/:path*',
     '/reports',
     '/leave/:path*',
-    '/leave'
+    '/leave',
+    '/muster/:path*',
+    '/muster'
   ]
 }; 
