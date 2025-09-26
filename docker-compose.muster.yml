@@ -1,0 +1,29 @@
+services:
+  muster-app:
+    build:
+      context: .
+      dockerfile: apps/muster/Dockerfile
+    container_name: inops-muster-app
+    ports:
+      - "3006:3006"  # Map container port 3006 to host port 3006
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3006
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3006/muster/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+
+networks:
+  inops-network:
+    external: true 

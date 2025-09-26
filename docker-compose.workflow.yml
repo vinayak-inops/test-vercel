@@ -1,0 +1,41 @@
+services:
+  workflow-app:
+    build:
+      context: .
+      dockerfile: apps/work-flow/Dockerfile
+    container_name: inops-workflow-app
+    ports:
+      - "3002:3002"  # Map container port 3002 to host port 3002
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3002
+      # Public API URLs (safe to expose)
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+      # Application settings
+      - APP_NAME=INops Workflow App
+      - APP_VERSION=1.0.0
+    env_file:
+      - ./config/app.env  # For non-sensitive configuration
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/workflow/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs  # Persistent logs
+
+volumes:
+  app-logs:
+    driver: local
+
+networks:
+  inops-network:
+    external: true 

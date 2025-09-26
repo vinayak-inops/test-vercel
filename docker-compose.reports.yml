@@ -1,0 +1,22 @@
+services:
+  reports-app:
+    image: inops-reports-app:latest
+    container_name: inops-reports-app
+    ports:
+      - "3003:3003"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.88.100:8000
+      - NEXTAUTH_URL=http://192.168.88.204:3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://192.168.88.204:3003/reports/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-networkbb
+
+networks:
+  inops-network:
+    external: true 

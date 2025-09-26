@@ -1,0 +1,5 @@
+export { BasicInformationForm } from "./basic-information-form"
+export { OrganizationalStructureForm } from "./organizational-structure-form"
+export { DeploymentDetailsForm } from "./deployment-details-form"
+export { ManagementHierarchyForm } from "./management-hierarchy-form"
+export { SettingsRemarksForm } from "./settings-remarks-form" 

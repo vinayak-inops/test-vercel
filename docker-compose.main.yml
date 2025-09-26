@@ -1,0 +1,27 @@
+services:
+  main-app:
+    image: inops-main-app:latest
+    container_name: inops-main-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXTAUTH_SECRET=Mj1iWKga9CcSzq1M8Nm65Kl36NtYKyoGwU5jHb0NYzM=
+      - NEXTAUTH_URL=http://192.168.88.204:3000
+      - NEXT_PUBLIC_NEXTAUTH_URL=http://192.168.88.204:3000
+      - KEYCLOAK_CLIENT_ID=gateway-client
+      - KEYCLOAK_CLIENT_SECRET=QqOiQK2kxiA6fLIMrMpHiCxQjveBR803
+      - KEYCLOAK_ISSUER=http://192.168.88.100:8080/realms/inops
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/main/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+networks:
+  inops-network:
+    external: true     external: true 

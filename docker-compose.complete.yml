@@ -1,0 +1,450 @@
+version: '3.8'
+
+services:
+  # ========================================
+  # BACKEND SERVICES
+  # ========================================
+
+  # Eureka Service Discovery (if needed)
+  eureka-server:
+    image: springcloud/eureka:latest
+    container_name: inops-eureka
+    ports:
+      - "8761:8761"
+    environment:
+      - SERVER_PORT=8761
+      - EUREKA_INSTANCE_HOSTNAME=192.168.71.156
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://192.168.71.156:8761/eureka/
+    networks:
+      - inops-network
+
+  # API Gateway
+  inops-gateway:
+    image: inops/inops-gateway:latest
+    container_name: inops-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      SERVER_PORT: 8000
+
+      # Eureka
+      EUREKA_INSTANCE_HOSTNAME: INOPS-GATEWAY
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+      EUREKA_INSTANCE_IP_ADDRESS: 192.168.71.156
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://192.168.71.156:8761/eureka/
+
+      # Reactive Mode
+      SPRING_MAIN_WEB_APPLICATION_TYPE: reactive
+
+      # OAuth2
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://192.168.1.23:8080/realms/inops
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://192.168.1.23:8080/realms/inops/protocol/openid-connect/certs
+
+      # CORS
+      SPRING_CLOUD_GATEWAY_GLOBALCORS_ADDTO_SIMPLE_URL_HANDLER_MAPPING: "true"
+      SPRING_CLOUD_GATEWAY_GLOBALCORS_CORSCONFIGURATIONS___/**__.ALLOWEDORIGINS: >-
+        http://localhost:8080,http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004,http://localhost:3005,http://localhost:3006,
+        http://192.168.71.71:3000,http://192.168.71.71:3001,http://192.168.71.71:3002,http://192.168.71.71:3003,http://192.168.71.71:3005,http://192.168.71.21:3004
+      SPRING_CLOUD_GATEWAY_GLOBALCORS_CORSCONFIGURATIONS___/**__.ALLOWEDMETHODS: GET,PUT,POST,DELETE
+      SPRING_CLOUD_GATEWAY_GLOBALCORS_CORSCONFIGURATIONS___/**__.ALLOWEDHEADERS: "*"
+      SPRING_CLOUD_GATEWAY_GLOBALCORS_CORSCONFIGURATIONS___/**__.ALLOWCREDENTIALS: "true"
+    networks:
+      - inops-network
+    depends_on:
+      - eureka-server
+
+  # Query Service
+  inops-query:
+    image: inops/inops-query:latest
+    container_name: inops-query
+    ports:
+      - "8086:8086"
+    environment:
+      SERVER_PORT: 8086
+      SPRING_APPLICATION_NAME: inops-query
+
+      # Eureka
+      EUREKA_INSTANCE_HOSTNAME: INOPS-QUERY
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+      EUREKA_INSTANCE_IP_ADDRESS: 192.168.71.156
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://192.168.71.156:8761/eureka/
+
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: http://192.168.88.100:9093
+      SPRING_KAFKA_CONSUMER_GROUP_ID: query-services
+      SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
+      SPRING_KAFKA_CONSUMER_KEY_DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_VALUE_DEFAULT_TYPE: com.inops.query.model.KafkaEvent
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
+
+      CAMEL_COMPONENT_KAFKA_BROKERS: http://192.168.88.100:9092
+      SPRING_DATA_MONGODB_URI: mongodb://admin:password@192.168.88.100:27017/ContractLabour?authSource=admin
+      SPRING_DATA_MONGODB_AUTO_INDEX_CREATION: "true"
+      SPRING_DATA_MONGODB_DRIVER_REACTIVE_CHANGE_STREAMS_ENABLED: "true"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://192.168.88.100:8080/realms/inops
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://192.168.88.100:8080/realms/inops/protocol/openid-connect/certs
+    networks:
+      - inops-network
+    depends_on:
+      - eureka-server
+
+  # Command Service
+  inops-command:
+    image: inops/inops-command:latest
+    container_name: inops-command
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+
+      # Eureka
+      EUREKA_INSTANCE_HOSTNAME: INOPS-COMMAND
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+      EUREKA_INSTANCE_IP_ADDRESS: 192.168.71.156
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://192.168.71.156:8761/eureka/
+
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      MANAGEMENT_ENDPOINT_INFO_ENABLED: "true"
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: http://192.168.88.100:9092
+      SPRING_KAFKA_PRODUCER_KEY_SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
+      SPRING_DATA_MONGODB_URI: mongodb://admin:password@192.168.88.100:27017/ContractLabour?authSource=admin
+
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://192.168.88.100:8080/realms/inops
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://192.168.88.100:8080/realms/inops/protocol/openid-connect/certs
+      KEYCLOAK_JWK_SET_URI: http://192.168.88.100:8080/realms/inops/protocol/openid-connect/certs
+    networks:
+      - inops-network
+    depends_on:
+      - eureka-server
+
+  # Workflow Service
+  inops-workflow:
+    image: inops/inops-workflow:latest
+    container_name: inops-workflow
+    ports:
+      - "8087:8087"
+    environment:
+      SERVER_PORT: 8087
+
+      # Eureka
+      EUREKA_INSTANCE_HOSTNAME: INOPS-WORKFLOW
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+      EUREKA_INSTANCE_IP_ADDRESS: 192.168.71.156
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://192.168.71.156:8761/eureka/
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: http://192.168.88.100:9093
+      SPRING_KAFKA_PRODUCER_KEY_SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_VALUE_DEFAULT_TYPE: com.inops.workflow.model.KafkaEvent
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
+
+      SPRING_DATA_MONGODB_URI: mongodb://admin:password@192.168.88.100:27017/ContractLabour?authSource=admin
+
+      ATTENDANCE_COMMAND_URL: http://inops-command
+      ATTENDANCE_QUERY_URL: http://inops-query
+      ATTENDANCE_JASPER_REPORTS_PATH: /app/reports
+
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://192.168.88.100:8080/realms/inops
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://192.168.88.100:8080/realms/inops/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://192.168.88.100:8080/realms/inops/protocol/openid-connect/token
+      KEYCLOAK_CLIENT_ID: gateway-client
+      KEYCLOAK_CLIENT_SECRET: GCaQU9I73XY1x4msAEUGXCdfUbOnJ81y
+      KEYCLOAK_TOKEN_HOST: http://192.168.88.100:8080
+
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_REACTIVE_FUNCTION_CLIENT: DEBUG
+    volumes:
+      - ./MyReports:/app/reports
+    networks:
+      - inops-network
+    depends_on:
+      - eureka-server
+      - inops-command
+      - inops-query
+
+  # ========================================
+  # FRONTEND APPLICATIONS
+  # ========================================
+
+  # Main Application (Entry Point)
+  main-app:
+    build:
+      context: .
+      dockerfile: apps/main/Dockerfile
+    container_name: inops-main-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3000
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Main App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    secrets:
+      - NEXTAUTH_SECRET
+      - DATABASE_URL
+      - API_KEY
+      - JWT_SECRET
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/main/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+    entrypoint: >
+      sh -c "
+        export NEXTAUTH_SECRET=$$(cat /run/secrets/NEXTAUTH_SECRET);
+        export DATABASE_URL=$$(cat /run/secrets/DATABASE_URL);
+        export API_KEY=$$(cat /run/secrets/API_KEY);
+        export JWT_SECRET=$$(cat /run/secrets/JWT_SECRET);
+        npm run start --prefix apps/main
+      "
+
+  # Master Application
+  master-app:
+    build:
+      context: .
+      dockerfile: apps/master/Dockerfile
+    container_name: inops-master-app
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3001
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Master App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+      - CORS_ORIGIN=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/master/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+  # Workflow Application
+  workflow-app:
+    build:
+      context: .
+      dockerfile: apps/work-flow/Dockerfile
+    container_name: inops-workflow-app
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3002
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Workflow App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/workflow/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+  # Reports Application
+  reports-app:
+    build:
+      context: .
+      dockerfile: apps/reports/Dockerfile
+    container_name: inops-reports-app
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3003
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Reports App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/reports/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+  # Dashboard Application
+  dashboard-app:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: inops-dashboard-app
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3004
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Dashboard App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/dashboard/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+  # Leave Application
+  leave-app:
+    build:
+      context: .
+      dockerfile: apps/leave/Dockerfile
+    container_name: inops-leave-app
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3005
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Leave App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3005/leave/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+  # Muster Application
+  muster-app:
+    build:
+      context: .
+      dockerfile: apps/muster/Dockerfile
+    container_name: inops-muster-app
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3006
+      - NEXT_PUBLIC_API_BASE_URL=http://192.168.71.20:8000
+      - NEXT_PUBLIC_GRAPHQL_URL=http://192.168.71.20:8000/graphql
+      - APP_NAME=INops Muster App
+      - APP_VERSION=1.0.0
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    env_file:
+      - ./config/app.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3006/muster/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inops-network
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      - inops-gateway
+
+# ========================================
+# SECRETS, VOLUMES, AND NETWORKS
+# ========================================
+
+secrets:
+  NEXTAUTH_SECRET:
+    file: ./secrets/nextauth_secret.txt
+  DATABASE_URL:
+    file: ./secrets/database_url.txt
+  API_KEY:
+    file: ./secrets/api_key.txt
+  JWT_SECRET:
+    file: ./secrets/jwt_secret.txt
+
+volumes:
+  app-logs:
+    driver: local
+
+networks:
+  inops-network:
+    name: inops-network
+    driver: bridge 
